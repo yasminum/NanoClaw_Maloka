@@ -44,6 +44,11 @@ interface SessionEntry {
   firstPrompt: string;
 }
 
+interface GeminiHistoryMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
 interface SessionsIndex {
   entries: SessionEntry[];
 }
@@ -58,6 +63,9 @@ interface SDKUserMessage {
 const IPC_INPUT_DIR = '/workspace/ipc/input';
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
 const IPC_POLL_MS = 500;
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+const geminiHistoryBySession = new Map<string, GeminiHistoryMessage[]>();
+const DEFAULT_WEB_RESULTS = 6;
 
 /**
  * Push-based async iterable for streaming user messages to the SDK.
@@ -397,6 +405,21 @@ async function runQuery(
   if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
     globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
   }
+  // Load SOUL.md as global identity context (applies to all groups when mounted)
+  const soulMdPath = '/workspace/SOUL.md';
+  let soulMd: string | undefined;
+  if (fs.existsSync(soulMdPath)) {
+    soulMd = fs.readFileSync(soulMdPath, 'utf-8');
+  }
+  const systemPromptParts: string[] = [];
+  if (soulMd) systemPromptParts.push(soulMd);
+  if (globalClaudeMd) systemPromptParts.push(globalClaudeMd);
+  if (systemPromptParts.length > 0) {
+    log(`System context loaded from: ${[
+      soulMd ? 'SOUL.md' : null,
+      globalClaudeMd ? 'global/CLAUDE.md' : null,
+    ].filter(Boolean).join(', ')}`);
+  }
 
   // Discover additional directories mounted at /workspace/extra/*
   // These are passed to the SDK so their CLAUDE.md files are loaded automatically
@@ -421,8 +444,12 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: globalClaudeMd
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
+      systemPrompt: systemPromptParts.length > 0
+        ? {
+          type: 'preset' as const,
+          preset: 'claude_code' as const,
+          append: systemPromptParts.join('\n\n'),
+        }
         : undefined,
       allowedTools: [
         'Bash',
@@ -490,6 +517,345 @@ async function runQuery(
   return { newSessionId, lastAssistantUuid, closedDuringQuery };
 }
 
+function randomId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function resolveProvider(
+  sdkEnv: Record<string, string | undefined>,
+): 'claude' | 'gemini' {
+  const provider = (sdkEnv.LLM_PROVIDER || 'claude').toLowerCase();
+  return provider === 'gemini' ? 'gemini' : 'claude';
+}
+
+function readGlobalMemory(containerInput: ContainerInput): string | undefined {
+  const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
+  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
+    return fs.readFileSync(globalClaudeMdPath, 'utf-8');
+  }
+  return undefined;
+}
+
+function readSoulMemory(): string | undefined {
+  const soulMdPath = '/workspace/SOUL.md';
+  if (fs.existsSync(soulMdPath)) {
+    return fs.readFileSync(soulMdPath, 'utf-8');
+  }
+  return undefined;
+}
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
+function extractLatestMessageText(prompt: string): string {
+  const regex = /<message\b[^>]*>([\s\S]*?)<\/message>/g;
+  let match: RegExpExecArray | null;
+  let latest = '';
+  while ((match = regex.exec(prompt)) !== null) {
+    latest = match[1] || '';
+  }
+  return decodeXmlEntities(latest).trim() || prompt.trim();
+}
+
+function shouldUseWebSearch(text: string): boolean {
+  return /\b(news|latest|today|now|current|update|updates|headlines|breaking|source|sources|link|links|youtube)\b/i.test(
+    text,
+  );
+}
+
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function decodeDdgUrl(rawHref: string): string {
+  try {
+    const abs = new URL(rawHref, 'https://duckduckgo.com');
+    const uddg = abs.searchParams.get('uddg');
+    if (uddg) return decodeURIComponent(uddg);
+    return abs.toString();
+  } catch {
+    return rawHref;
+  }
+}
+
+interface WebResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+async function searchWithSerper(
+  queryText: string,
+  apiKey: string,
+  limit: number,
+): Promise<WebResult[]> {
+  const resp = await fetchWithTimeout(
+    'https://google.serper.dev/search',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-KEY': apiKey,
+      },
+      body: JSON.stringify({ q: queryText, num: limit }),
+    },
+    12_000,
+  );
+  if (!resp.ok) {
+    throw new Error(`Serper search failed (${resp.status})`);
+  }
+  const data = (await resp.json()) as {
+    organic?: Array<{ title?: string; link?: string; snippet?: string }>;
+  };
+  return (data.organic || [])
+    .map((r) => ({
+      title: (r.title || '').trim(),
+      url: (r.link || '').trim(),
+      snippet: (r.snippet || '').trim(),
+    }))
+    .filter((r) => r.title && r.url)
+    .slice(0, limit);
+}
+
+async function searchWithDuckDuckGo(
+  queryText: string,
+  limit: number,
+): Promise<WebResult[]> {
+  const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(queryText)}`;
+  const resp = await fetchWithTimeout(url, { method: 'GET' }, 12_000);
+  if (!resp.ok) {
+    throw new Error(`DuckDuckGo search failed (${resp.status})`);
+  }
+  const html = await resp.text();
+  const out: WebResult[] = [];
+  const anchorRe =
+    /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(html)) !== null && out.length < limit) {
+    const rawHref = m[1] || '';
+    const titleRaw = m[2] || '';
+    const title = stripHtmlTags(decodeXmlEntities(titleRaw));
+    const link = decodeDdgUrl(decodeXmlEntities(rawHref));
+    if (!title || !/^https?:\/\//i.test(link)) continue;
+
+    // Try to read nearby snippet block
+    const tail = html.slice(m.index, Math.min(html.length, m.index + 1600));
+    const snippetMatch =
+      /class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i.exec(tail) ||
+      /class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(tail);
+    const snippet = snippetMatch
+      ? stripHtmlTags(decodeXmlEntities(snippetMatch[1] || ''))
+      : '';
+    out.push({ title, url: link, snippet });
+  }
+  return out;
+}
+
+async function fetchPageSnippet(url: string): Promise<string> {
+  try {
+    const resp = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; NanoClaw/1.0)',
+        },
+      },
+      8_000,
+    );
+    if (!resp.ok) return '';
+    const html = await resp.text();
+    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    const descMatch =
+      /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i.exec(
+        html,
+      ) ||
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["'][^>]*>/i.exec(
+        html,
+      );
+    const title = titleMatch ? stripHtmlTags(decodeXmlEntities(titleMatch[1])) : '';
+    const desc = descMatch ? stripHtmlTags(decodeXmlEntities(descMatch[1])) : '';
+    return [title, desc].filter(Boolean).join(' - ').slice(0, 300);
+  } catch {
+    return '';
+  }
+}
+
+async function buildWebContext(
+  latestUserMessage: string,
+  sdkEnv: Record<string, string | undefined>,
+): Promise<string> {
+  if (!shouldUseWebSearch(latestUserMessage)) return '';
+
+  const limit = parseInt(sdkEnv.WEB_SEARCH_RESULTS || `${DEFAULT_WEB_RESULTS}`, 10) || DEFAULT_WEB_RESULTS;
+  const serperKey = sdkEnv.SERPER_API_KEY;
+  let results: WebResult[] = [];
+  try {
+    results = serperKey
+      ? await searchWithSerper(latestUserMessage, serperKey, limit)
+      : await searchWithDuckDuckGo(latestUserMessage, limit);
+  } catch (err) {
+    return `WEB_SEARCH_ERROR: ${err instanceof Error ? err.message : String(err)}`;
+  }
+
+  if (/youtube/i.test(latestUserMessage)) {
+    const ytFirst = results.filter((r) => /youtube\.com|youtu\.be/i.test(r.url));
+    const rest = results.filter((r) => !/youtube\.com|youtu\.be/i.test(r.url));
+    results = [...ytFirst, ...rest];
+  }
+
+  const enriched = await Promise.all(
+    results.slice(0, limit).map(async (r) => {
+      const pageSnippet = await fetchPageSnippet(r.url);
+      return {
+        ...r,
+        pageSnippet,
+      };
+    }),
+  );
+
+  if (enriched.length === 0) return 'WEB_SEARCH_RESULTS: none';
+  const lines: string[] = [];
+  lines.push(`WEB_SEARCH_RESULTS (${new Date().toISOString()}):`);
+  enriched.forEach((r, idx) => {
+    lines.push(`[${idx + 1}] ${r.title}`);
+    lines.push(`URL: ${r.url}`);
+    if (r.snippet) lines.push(`Snippet: ${r.snippet}`);
+    if (r.pageSnippet) lines.push(`Page: ${r.pageSnippet}`);
+  });
+  return lines.join('\n');
+}
+
+async function runGeminiTurn(
+  prompt: string,
+  sessionId: string,
+  containerInput: ContainerInput,
+  sdkEnv: Record<string, string | undefined>,
+): Promise<void> {
+  const apiKey = sdkEnv.GEMINI_API_KEY || sdkEnv.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing GEMINI_API_KEY (or GOOGLE_API_KEY) for Gemini provider');
+  }
+
+  const model = sdkEnv.LLM_MODEL || DEFAULT_GEMINI_MODEL;
+  const history = geminiHistoryBySession.get(sessionId) || [];
+  const soulPrompt = readSoulMemory();
+  const globalPrompt = readGlobalMemory(containerInput);
+  const systemPromptParts = [soulPrompt, globalPrompt].filter(
+    (part): part is string => Boolean(part),
+  );
+  const systemPrompt = systemPromptParts.length > 0
+    ? systemPromptParts.join('\n\n')
+    : undefined;
+  const latestUserMessage = extractLatestMessageText(prompt);
+  const webContext = await buildWebContext(latestUserMessage, sdkEnv);
+
+  if (systemPromptParts.length > 0) {
+    log(`Gemini system context loaded from: ${[
+      soulPrompt ? 'SOUL.md' : null,
+      globalPrompt ? 'global/CLAUDE.md' : null,
+    ].filter(Boolean).join(', ')}`);
+  }
+
+  const behavioralInstruction =
+    'You are Andy, an assistant in chat. Reply directly to the user\'s latest message. ' +
+    'Do not describe, summarize, or classify what the user said. ' +
+    'Use prior messages only as context. Keep responses concise and actionable unless the user asks for detail. ' +
+    'If WEB_SEARCH_RESULTS are provided, prioritize them for factual/current answers and include source URLs in your response.';
+
+  const currentTurnText = webContext
+    ? `${latestUserMessage}\n\n${webContext}`
+    : latestUserMessage;
+
+  const payload: Record<string, unknown> = {
+    contents: [
+      ...history.map((m) => ({
+        role: m.role,
+        parts: [{ text: m.text }],
+      })),
+      {
+        role: 'user',
+        parts: [{ text: currentTurnText }],
+      },
+    ],
+  };
+
+  if (systemPrompt) {
+    payload.systemInstruction = {
+      parts: [{ text: `${behavioralInstruction}\n\n${systemPrompt}` }],
+    };
+  } else {
+    payload.systemInstruction = {
+      parts: [{ text: behavioralInstruction }],
+    };
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json()) as {
+    error?: { message?: string };
+    candidates?: Array<{
+      finishReason?: string;
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+  };
+
+  if (!response.ok || data.error) {
+    const errMessage =
+      data.error?.message || `Gemini API error (status ${response.status})`;
+    throw new Error(errMessage);
+  }
+
+  const text = (data.candidates?.[0]?.content?.parts || [])
+    .map((p) => p.text || '')
+    .join('')
+    .trim();
+
+  if (!text) {
+    const reason = data.candidates?.[0]?.finishReason || 'empty response';
+    throw new Error(`Gemini returned no text (${reason})`);
+  }
+
+  history.push({ role: 'user', text: latestUserMessage });
+  history.push({ role: 'model', text });
+  geminiHistoryBySession.set(sessionId, history);
+
+  writeOutput({
+    status: 'success',
+    result: text,
+    newSessionId: sessionId,
+  });
+}
+
 async function main(): Promise<void> {
   let containerInput: ContainerInput;
 
@@ -515,6 +881,7 @@ async function main(): Promise<void> {
     sdkEnv[key] = value;
   }
 
+  const provider = resolveProvider(sdkEnv);
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');
 
@@ -535,26 +902,34 @@ async function main(): Promise<void> {
     prompt += '\n' + pending.join('\n');
   }
 
+  if (provider === 'gemini' && !sessionId) {
+    sessionId = `gemini-${Date.now()}-${randomId()}`;
+  }
+
   // Query loop: run query → wait for IPC message → run new query → repeat
   let resumeAt: string | undefined;
   try {
     while (true) {
-      log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
+      log(`Starting ${provider} query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
 
-      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
-      if (queryResult.newSessionId) {
-        sessionId = queryResult.newSessionId;
-      }
-      if (queryResult.lastAssistantUuid) {
-        resumeAt = queryResult.lastAssistantUuid;
-      }
+      if (provider === 'gemini') {
+        await runGeminiTurn(prompt, sessionId!, containerInput, sdkEnv);
+      } else {
+        const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+        if (queryResult.newSessionId) {
+          sessionId = queryResult.newSessionId;
+        }
+        if (queryResult.lastAssistantUuid) {
+          resumeAt = queryResult.lastAssistantUuid;
+        }
 
-      // If _close was consumed during the query, exit immediately.
-      // Don't emit a session-update marker (it would reset the host's
-      // idle timer and cause a 30-min delay before the next _close).
-      if (queryResult.closedDuringQuery) {
-        log('Close sentinel consumed during query, exiting');
-        break;
+        // If _close was consumed during the query, exit immediately.
+        // Don't emit a session-update marker (it would reset the host's
+        // idle timer and cause a 30-min delay before the next _close).
+        if (queryResult.closedDuringQuery) {
+          log('Close sentinel consumed during query, exiting');
+          break;
+        }
       }
 
       // Emit session update so host can track it

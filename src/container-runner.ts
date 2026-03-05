@@ -62,6 +62,33 @@ function buildVolumeMounts(
   const projectRoot = process.cwd();
   const groupDir = resolveGroupFolderPath(group.folder);
 
+  // ─────────────────────────────────────────────────────────────
+  // SOUL.md - Global identity file (read-only, all groups)
+  // ─────────────────────────────────────────────────────────────
+  const soulPathCandidates = [
+    path.join(projectRoot, 'SOUL.md'),
+    path.join(projectRoot, 'workspace', 'SOUL.md'),
+  ];
+  const soulPath = soulPathCandidates.find((candidate) =>
+    fs.existsSync(candidate),
+  );
+  if (soulPath) {
+    mounts.push({
+      hostPath: soulPath,
+      containerPath: '/workspace/SOUL.md',
+      readonly: true,
+    });
+  }
+
+  logger.debug(
+    {
+      group: group.name,
+      soulPath: soulPath ?? null,
+      checkedPaths: soulPathCandidates,
+    },
+    soulPath ? 'SOUL.md mount enabled' : 'SOUL.md not found; skipping mount',
+  );
+  
   if (isMain) {
     // Main gets the project root read-only. Writable paths the agent needs
     // (group folder, IPC, .claude/) are mounted separately below.
@@ -177,8 +204,12 @@ function buildVolumeMounts(
     group.folder,
     'agent-runner-src',
   );
-  if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
-    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+  if (fs.existsSync(agentRunnerSrc)) {
+    fs.mkdirSync(groupAgentRunnerDir, { recursive: true });
+    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, {
+      recursive: true,
+      force: true,
+    });
   }
   mounts.push({
     hostPath: groupAgentRunnerDir,
@@ -204,7 +235,14 @@ function buildVolumeMounts(
  * Secrets are never written to disk or mounted as files.
  */
 function readSecrets(): Record<string, string> {
-  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
+  return readEnvFile([
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'ANTHROPIC_API_KEY',
+    'LLM_PROVIDER',
+    'LLM_MODEL',
+    'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+  ]);
 }
 
 function buildContainerArgs(

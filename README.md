@@ -93,6 +93,19 @@ Or run `/customize` for guided changes.
 
 The codebase is small enough that Claude can safely modify it.
 
+### Gemini Provider (Experimental)
+
+You can switch the container agent to Gemini by setting these in `.env`:
+
+```bash
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-3-flash
+GEMINI_API_KEY=your_api_key_here
+```
+
+`LLM_PROVIDER=claude` (default) keeps the Claude Agent SDK path.
+Gemini mode currently supports text generation only and does not use Claude SDK tool orchestration.
+
 ## Contributing
 
 **Don't add features. Add skills.**
