@@ -7,16 +7,23 @@ dist/
 # Local data & auth
 store/
 data/
+!data/registered_groups.json
 logs/
 
 # Groups - only track base structure and specific CLAUDE.md files
 groups/*
 !groups/main/
 !groups/global/
+!groups/healingmotions/
+!groups/meliniseri/
 groups/main/*
 groups/global/*
+groups/healingmotions/*
+groups/meliniseri/*
 !groups/main/CLAUDE.md
 !groups/global/CLAUDE.md
+!groups/healingmotions/CLAUDE.md
+!groups/meliniseri/CLAUDE.md
 
 # Secrets
 *.keys.json
