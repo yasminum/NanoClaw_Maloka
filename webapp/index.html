@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Good Vybes — AI Twins</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: #1a1a2e;
+      --bg-card-hover: #22223a;
+      --accent-green: #00d68f;
+      --accent-green-glow: rgba(0, 214, 143, 0.3);
+      --accent-purple: #7c5cfc;
+      --accent-purple-glow: rgba(124, 92, 252, 0.3);
+      --accent-gold: #ffd700;
+      --accent-cyan: #00d4ff;
+      --text-primary: #f0f0f5;
+      --text-secondary: #8888a0;
+      --text-muted: #55556a;
+      --gradient-max: linear-gradient(135deg, #00d68f 0%, #00b4d8 50%, #0096c7 100%);
+      --gradient-melini: linear-gradient(135deg, #7c5cfc 0%, #c084fc 50%, #e879f9 100%);
+      --gradient-hero: linear-gradient(180deg, rgba(0, 214, 143, 0.08) 0%, rgba(124, 92, 252, 0.08) 50%, transparent 100%);
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-glow: rgba(255, 255, 255, 0.12);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== ANIMATED BACKGROUND ===== */
+    .bg-orbs {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      animation: float 8s ease-in-out infinite;
+    }
+
+    .orb-1 {
+      width: 300px;
+      height: 300px;
+      background: rgba(0, 214, 143, 0.12);
+      top: -100px;
+      right: -100px;
+      animation-delay: 0s;
+    }
+
+    .orb-2 {
+      width: 250px;
+      height: 250px;
+      background: rgba(124, 92, 252, 0.12);
+      bottom: -50px;
+      left: -80px;
+      animation-delay: -4s;
+    }
+
+    .orb-3 {
+      width: 200px;
+      height: 200px;
+      background: rgba(0, 212, 255, 0.08);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation-delay: -2s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-30px) scale(1.05); }
+    }
+
+    /* ===== MAIN CONTAINER ===== */
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 20px 16px 100px;
+    }
+
+    /* ===== HEADER ===== */
+    .header {
+      text-align: center;
+      padding: 24px 0 32px;
+    }
+
+    .logo-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-purple));
+      margin-bottom: 16px;
+      position: relative;
+      animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px var(--accent-green-glow), 0 0 40px rgba(124, 92, 252, 0.15); }
+      50% { box-shadow: 0 0 30px var(--accent-green-glow), 0 0 60px rgba(124, 92, 252, 0.25); }
+    }
+
+    .logo-icon {
+      font-size: 36px;
+    }
+
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+    }
+
+    .powered-by {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ===== SECTION TITLE ===== */
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ===== TWIN CARDS ===== */
+    .twin-card {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      overflow: hidden;
+    }
+
+    .twin-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 20px 20px 0 0;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .twin-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-glow);
+    }
+
+    .twin-card:hover::before {
+      opacity: 1;
+    }
+
+    .twin-card:active {
+      transform: translateY(-2px) scale(0.98);
+    }
+
+    .twin-card.max::before {
+      background: var(--gradient-max);
+    }
+
+    .twin-card.max:hover {
+      box-shadow: 0 8px 32px rgba(0, 214, 143, 0.15), 0 0 0 1px rgba(0, 214, 143, 0.1);
+    }
+
+    .twin-card.melini::before {
+      background: var(--gradient-melini);
+    }
+
+    .twin-card.melini:hover {
+      box-shadow: 0 8px 32px rgba(124, 92, 252, 0.15), 0 0 0 1px rgba(124, 92, 252, 0.1);
+    }
+
+    .twin-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .twin-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .twin-avatar.max {
+      background: linear-gradient(135deg, rgba(0, 214, 143, 0.2), rgba(0, 180, 216, 0.2));
+      border: 1px solid rgba(0, 214, 143, 0.3);
+    }
+
+    .twin-avatar.melini {
+      background: linear-gradient(135deg, rgba(124, 92, 252, 0.2), rgba(232, 121, 249, 0.2));
+      border: 1px solid rgba(124, 92, 252, 0.3);
+    }
+
+    .twin-online {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      border: 2px solid var(--bg-card);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .twin-info {
+      flex: 1;
+    }
+
+    .twin-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .twin-handle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .twin-followers {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .twin-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .twin-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tag {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+
+    .tag.max {
+      background: rgba(0, 214, 143, 0.12);
+      color: #00d68f;
+      border: 1px solid rgba(0, 214, 143, 0.2);
+    }
+
+    .tag.melini {
+      background: rgba(124, 92, 252, 0.12);
+      color: #a78bfa;
+      border: 1px solid rgba(124, 92, 252, 0.2);
+    }
+
+    .twin-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      letter-spacing: 0.3px;
+    }
+
+    .twin-cta.max {
+      background: var(--gradient-max);
+      color: #fff;
+    }
+
+    .twin-cta.max:hover {
+      box-shadow: 0 4px 20px rgba(0, 214, 143, 0.4);
+    }
+
+    .twin-cta.melini {
+      background: var(--gradient-melini);
+      color: #fff;
+    }
+
+    .twin-cta.melini:hover {
+      box-shadow: 0 4px 20px rgba(124, 92, 252, 0.4);
+    }
+
+    .twin-cta:active {
+      transform: scale(0.97);
+    }
+
+    .cta-arrow {
+      font-size: 18px;
+      transition: transform 0.3s ease;
+    }
+
+    .twin-cta:hover .cta-arrow {
+      transform: translateX(4px);
+    }
+
+    /* ===== QUOTE SECTION ===== */
+    .quote-section {
+      text-align: center;
+      padding: 24px;
+      margin: 24px 0;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(0, 214, 143, 0.05), rgba(124, 92, 252, 0.05));
+      border: 1px solid var(--border-subtle);
+    }
+
+    .quote-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+      font-style: italic;
+      line-height: 1.6;
+    }
+
+    .quote-author {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    /* ===== STATS BAR ===== */
+    .stats-bar {
+      display: flex;
+      justify-content: space-around;
+      padding: 20px;
+      margin: 16px 0;
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* ===== FOOTER ===== */
+    .footer {
+      text-align: center;
+      padding: 24px 0 16px;
+    }
+
+    .footer-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .footer-brand {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ===== ANIMATIONS ===== */
+    .fade-in {
+      animation: fadeInUp 0.6s ease-out forwards;
+      opacity: 0;
+    }
+
+    .fade-in-1 { animation-delay: 0.1s; }
+    .fade-in-2 { animation-delay: 0.2s; }
+    .fade-in-3 { animation-delay: 0.35s; }
+    .fade-in-4 { animation-delay: 0.5s; }
+    .fade-in-5 { animation-delay: 0.65s; }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ===== RIPPLE EFFECT ===== */
+    .ripple {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ripple::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s ease, height 0.6s ease;
+    }
+
+    .ripple:active::after {
+      width: 300px;
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="container">
+    <!-- HEADER -->
+    <header class="header fade-in fade-in-1">
+      <div class="logo-container">
+        <span class="logo-icon">🌿</span>
+      </div>
+      <h1 class="brand-name">Good Vybes</h1>
+      <p class="brand-sub">AI-Powered Wellness Guidance</p>
+      <p class="powered-by">Powered by Maloka × NanoClaw</p>
+    </header>
+
+    <!-- STATS -->
+    <div class="stats-bar fade-in fade-in-2">
+      <div class="stat-item">
+        <div class="stat-value">2</div>
+        <div class="stat-label">AI Twins</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">618K</div>
+        <div class="stat-label">Followers</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">24/7</div>
+        <div class="stat-label">Available</div>
+      </div>
+    </div>
+
+    <!-- SECTION: CHOOSE YOUR GURU -->
+    <div class="section-title fade-in fade-in-2">
+      <span class="dot"></span>
+      Choose Your AI Guru
+    </div>
+
+    <!-- MAX CARD -->
+    <div class="twin-card max ripple fade-in fade-in-3" onclick="openTwin('max')">
+      <div class="twin-header">
+        <div class="twin-avatar max">
+          🧘‍♂️
+          <div class="twin-online"></div>
+        </div>
+        <div class="twin-info">
+          <div class="twin-name">Max Lowenstein</div>
+          <div class="twin-handle">@healingmotions</div>
+          <div class="twin-followers">📸 218K followers</div>
+        </div>
+      </div>
+      <p class="twin-desc">
+        Registered Dietitian, breathwork facilitator & yoga teacher. 
+        Science-backed wellness with a warm, grounded approach.
+      </p>
+      <div class="twin-tags">
+        <span class="tag max">💨 Breathwork</span>
+        <span class="tag max">🧘 Yoga</span>
+        <span class="tag max">🥗 Nutrition</span>
+        <span class="tag max">🧠 Meditation</span>
+      </div>
+      <button class="twin-cta max">
+        Chat with Max <span class="cta-arrow">→</span>
+      </button>
+    </div>
+
+    <!-- MELINI CARD -->
+    <div class="twin-card melini ripple fade-in fade-in-4" onclick="openTwin('melini')">
+      <div class="twin-header">
+        <div class="twin-avatar melini">
+          🧘‍♀️
+          <div class="twin-online"></div>
+        </div>
+        <div class="twin-info">
+          <div class="twin-name">Melini Jesudason</div>
+          <div class="twin-handle">@meliniseri</div>
+          <div class="twin-followers">📸 400K followers</div>
+        </div>
+      </div>
+      <p class="twin-desc">
+        World-renowned yoga instructor, Reiki Master & spiritual medium. 
+        Dynamic practice meets deep spiritual wisdom.
+      </p>
+      <div class="twin-tags">
+        <span class="tag melini">🤸 Inversions</span>
+        <span class="tag melini">✨ Energy Healing</span>
+        <span class="tag melini">🔥 Ashtanga</span>
+        <span class="tag melini">💫 Spirituality</span>
+      </div>
+      <button class="twin-cta melini">
+        Chat with Melini <span class="cta-arrow">→</span>
+      </button>
+    </div>
+
+    <!-- QUOTE -->
+    <div class="quote-section fade-in fade-in-5">
+      <p class="quote-text">"Change your breath, change your life."</p>
+      <p class="quote-author">— Max Lowenstein</p>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer fade-in fade-in-5">
+      <p class="footer-text">
+        Built with ✨ by <span class="footer-brand">Maloka</span>
+      </p>
+      <p class="footer-text" style="margin-top: 4px;">
+        AI Twins respond in the style of real wellness experts
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    // Initialize Telegram Web App
+    const tg = window.Telegram?.WebApp;
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      
+      // Match Telegram theme
+      const params = tg.themeParams;
+      if (params) {
+        document.documentElement.style.setProperty('--bg-primary', params.bg_color || '#0a0a0f');
+        document.documentElement.style.setProperty('--bg-secondary', params.secondary_bg_color || '#12121a');
+      }
+    }
+
+    function openTwin(twin) {
+      // Haptic feedback
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.impactOccurred('medium');
+      }
+
+      // Send data back to bot
+      if (tg) {
+        const message = twin === 'max'
+          ? '@Max Hello! I want to learn about breathwork and wellness'
+          : '@Melini Hello! I want to explore yoga and energy healing';
+        
+        tg.sendData(JSON.stringify({
+          action: 'select_twin',
+          twin: twin,
+          message: message
+        }));
+      } else {
+        // Fallback for non-Telegram browsers
+        const twinName = twin === 'max' ? 'Max Lowenstein' : 'Melini Jesudason';
+        alert(`Opening chat with ${twinName}...\n\nIn Telegram, this would start a conversation with the AI Twin!`);
+      }
+    }
+
+    // Rotate quotes
+    const quotes = [
+      { text: '"Change your breath, change your life."', author: '— Max Lowenstein' },
+      { text: '"Feel it to heal it."', author: '— Melini Jesudason' },
+      { text: '"Your body is your temple and your playground."', author: '— Melini Jesudason' },
+      { text: '"Your body knows the way."', author: '— Max Lowenstein' }
+    ];
+
+    let quoteIndex = 0;
+    setInterval(() => {
+      quoteIndex = (quoteIndex + 1) % quotes.length;
+      const quoteEl = document.querySelector('.quote-text');
+      const authorEl = document.querySelector('.quote-author');
+      
+      quoteEl.style.opacity = 0;
+      authorEl.style.opacity = 0;
+      
+      setTimeout(() => {
+        quoteEl.textContent = quotes[quoteIndex].text;
+        authorEl.textContent = quotes[quoteIndex].author;
+        quoteEl.style.opacity = 1;
+        authorEl.style.opacity = 1;
+      }, 400);
+    }, 5000);
+
+    // Add transition for quote fading
+    document.querySelector('.quote-text').style.transition = 'opacity 0.4s ease';
+    document.querySelector('.quote-author').style.transition = 'opacity 0.4s ease';
+  </script>
+</body>
+</html>

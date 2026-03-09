@@ -1,5 +1,7 @@
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 import {
   ASSISTANT_NAME,
@@ -508,6 +510,44 @@ async function main(): Promise<void> {
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
     process.exit(1);
+  });
+
+  // Start web server for Mini App
+  startWebServer();
+}
+
+/** Serve the Mini App webapp on Railway's PORT (or 3000 locally). */
+function startWebServer(): void {
+  const port = parseInt(process.env.PORT || '3000', 10);
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const webappDir = path.join(__dirname, '..', 'webapp');
+
+  const server = http.createServer((req, res) => {
+    // Health check endpoint for Railway
+    if (req.url === '/health' || req.url === '/healthz') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', service: 'nanoclaw-maloka' }));
+      return;
+    }
+
+    // Serve webapp/index.html for everything else
+    const filePath = path.join(webappDir, 'index.html');
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Mini App not found');
+      return;
+    }
+
+    const html = fs.readFileSync(filePath, 'utf-8');
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
+    });
+    res.end(html);
+  });
+
+  server.listen(port, () => {
+    logger.info({ port }, `Mini App web server listening on port ${port}`);
   });
 }
 
