@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -7,7 +8,9 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --bg-primary: #0a0a0f;
@@ -93,8 +96,15 @@
     }
 
     @keyframes float {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50% { transform: translateY(-30px) scale(1.05); }
+
+      0%,
+      100% {
+        transform: translateY(0) scale(1);
+      }
+
+      50% {
+        transform: translateY(-30px) scale(1.05);
+      }
     }
 
     /* ===== MAIN CONTAINER ===== */
@@ -126,8 +136,15 @@
     }
 
     @keyframes pulse-glow {
-      0%, 100% { box-shadow: 0 0 20px var(--accent-green-glow), 0 0 40px rgba(124, 92, 252, 0.15); }
-      50% { box-shadow: 0 0 30px var(--accent-green-glow), 0 0 60px rgba(124, 92, 252, 0.25); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px var(--accent-green-glow), 0 0 40px rgba(124, 92, 252, 0.15);
+      }
+
+      50% {
+        box-shadow: 0 0 30px var(--accent-green-glow), 0 0 60px rgba(124, 92, 252, 0.25);
+      }
     }
 
     .logo-icon {
@@ -182,8 +199,15 @@
     }
 
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
     }
 
     /* ===== TWIN CARDS ===== */
@@ -477,17 +501,32 @@
       opacity: 0;
     }
 
-    .fade-in-1 { animation-delay: 0.1s; }
-    .fade-in-2 { animation-delay: 0.2s; }
-    .fade-in-3 { animation-delay: 0.35s; }
-    .fade-in-4 { animation-delay: 0.5s; }
-    .fade-in-5 { animation-delay: 0.65s; }
+    .fade-in-1 {
+      animation-delay: 0.1s;
+    }
+
+    .fade-in-2 {
+      animation-delay: 0.2s;
+    }
+
+    .fade-in-3 {
+      animation-delay: 0.35s;
+    }
+
+    .fade-in-4 {
+      animation-delay: 0.5s;
+    }
+
+    .fade-in-5 {
+      animation-delay: 0.65s;
+    }
 
     @keyframes fadeInUp {
       from {
         opacity: 0;
         transform: translateY(20px);
       }
+
       to {
         opacity: 1;
         transform: translateY(0);
@@ -519,6 +558,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="bg-orbs">
     <div class="orb orb-1"></div>
@@ -573,7 +613,7 @@
         </div>
       </div>
       <p class="twin-desc">
-        Registered Dietitian, breathwork facilitator & yoga teacher. 
+        Registered Dietitian, breathwork facilitator & yoga teacher.
         Science-backed wellness with a warm, grounded approach.
       </p>
       <div class="twin-tags">
@@ -601,7 +641,7 @@
         </div>
       </div>
       <p class="twin-desc">
-        World-renowned yoga instructor, Reiki Master & spiritual medium. 
+        World-renowned yoga instructor, Reiki Master & spiritual medium.
         Dynamic practice meets deep spiritual wisdom.
       </p>
       <div class="twin-tags">
@@ -639,7 +679,7 @@
     if (tg) {
       tg.ready();
       tg.expand();
-      
+
       // Match Telegram theme
       const params = tg.themeParams;
       if (params) {
@@ -649,26 +689,22 @@
     }
 
     function openTwin(twin) {
-      // Haptic feedback
+      // Haptic feedback if inside Telegram
       if (tg?.HapticFeedback) {
         tg.HapticFeedback.impactOccurred('medium');
       }
 
-      // Send data back to bot
-      if (tg) {
-        const message = twin === 'max'
-          ? '@Max Hello! I want to learn about breathwork and wellness'
-          : '@Melini Hello! I want to explore yoga and energy healing';
-        
-        tg.sendData(JSON.stringify({
-          action: 'select_twin',
-          twin: twin,
-          message: message
-        }));
+      // Deep link to the Telegram bot with start parameter
+      const botUsername = 'nanoclaw_maloka_bot';
+      const startParam = twin === 'max' ? 'max' : 'melini';
+      const deepLink = `https://t.me/${botUsername}?start=${startParam}`;
+
+      // If inside Telegram Mini App, use openTelegramLink
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(deepLink);
       } else {
-        // Fallback for non-Telegram browsers
-        const twinName = twin === 'max' ? 'Max Lowenstein' : 'Melini Jesudason';
-        alert(`Opening chat with ${twinName}...\n\nIn Telegram, this would start a conversation with the AI Twin!`);
+        // Open in browser — redirects to Telegram app or web
+        window.open(deepLink, '_blank');
       }
     }
 
@@ -685,10 +721,10 @@
       quoteIndex = (quoteIndex + 1) % quotes.length;
       const quoteEl = document.querySelector('.quote-text');
       const authorEl = document.querySelector('.quote-author');
-      
+
       quoteEl.style.opacity = 0;
       authorEl.style.opacity = 0;
-      
+
       setTimeout(() => {
         quoteEl.textContent = quotes[quoteIndex].text;
         authorEl.textContent = quotes[quoteIndex].author;
@@ -702,4 +738,5 @@
     document.querySelector('.quote-author').style.transition = 'opacity 0.4s ease';
   </script>
 </body>
+
 </html>
